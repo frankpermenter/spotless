@@ -1,4 +1,4 @@
-classdef spotsqlprg
+classdef spotsdp
     properties 
         % Developer's Notes about Internal Representation:
         % 
@@ -101,8 +101,8 @@ classdef spotsqlprg
     end
     methods
         
-        function pr=spotsqlprg(name)
-        % pr=spotsqlprg(prefix)
+        function pr=spotsdp(name)
+        % pr=spotsdp(prefix)
         %
         % prefix -- Scalar character, legal name for msspoly.
         %
@@ -141,7 +141,7 @@ classdef spotsqlprg
             n = pr.freeNum;
         end
         function n = numPSD(pr)
-            n = sum(spotsqlprg.psdDimToNo(pr.psdDim));
+            n = sum(spotsdp.psdDimToNo(pr.psdDim));
         end
         function n = numLor(pr)
             n = sum(pr.lorDim);
@@ -157,7 +157,7 @@ classdef spotsqlprg
             if ~spot_hasSize(dim,[1 1]) || ~spot_isIntGE(dim,1)
                 error('Dimension must be scalar positive integer.');
             end
-            n = spotsqlprg.psdDimToNo(dim);
+            n = spotsdp.psdDimToNo(dim);
             
             Q = mss_v2s(msspoly(pr.psdName,[n pr.numPSD]));
             
@@ -169,7 +169,7 @@ classdef spotsqlprg
                 error('Dimension must be 1x2 positive integer.');
             end
             
-            n = spotsqlprg.psdDimToNo(dim(1));
+            n = spotsdp.psdDimToNo(dim(1));
             
             Qs = reshape(msspoly(pr.psdName,[n*dim(2) pr.numPSD]),n,dim(2));
             pr.psdDim = [pr.psdDim dim(1)*ones(1,dim(2))];
@@ -259,7 +259,7 @@ classdef spotsqlprg
             if ~isa(exp,'msspoly')
                 error('Argument must be an msspoly.');
             end
-            if ~spotsqlprg.validSymMtxVec(size(exp,1))
+            if ~spotsdp.validSymMtxVec(size(exp,1))
                 error('Argument wrong size.');
             end
             
