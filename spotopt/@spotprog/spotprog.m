@@ -1,4 +1,4 @@
-classdef spotprob
+classdef spotprog
     properties 
         longname = '';
         sdp=[];         % Current SDP Problem Description
@@ -32,7 +32,7 @@ classdef spotprob
     end
 
     methods
-        function prob = spotprob(shortname,longname)
+        function prob = spotprog(shortname,longname)
             if nargin >= 1,
                 prob.sdp = spotsdp(shortname);
             else
