@@ -63,33 +63,9 @@ classdef spotsdp
         end
 
         
-%  Generate variables of a given type.        
-        function f = freeVariables(pr)
-            f = msspoly(pr.freeName,pr.numFree);
-        end
-        function p = posVariables(pr)
-            p = msspoly(pr.posName,pr.numPos);
-        end
-        function l = lorVariables(pr)
-            l = msspoly(pr.lorName,pr.numLor);
-        end
-        function r = rlorVariables(pr)
-            r = msspoly(pr.rlorName,pr.numRLor);
-        end
-        function p = psdVariables(pr)
-            p = msspoly(pr.psdName,pr.numPSD);
-        end
-        
 
         
-        function flag = realLinearInDec(pr,exp)
-            [x,pow,Coeff] = decomp(exp);
-            [~,xid] = isfree(x);
-            [~,vid] = isfree(pr.variables);
-            flag = ~(any(mss_match(vid,xid) == 0) | ...
-                     any(pow(:) > 1) | ...
-                     any(imag(Coeff(:)) ~= 0));
-        end
+
         
         function flag = legalEq(pr,eq)
             if ~isa(eq,'msspoly')
@@ -119,6 +95,31 @@ classdef spotsdp
             end
         end
         
+        function flag = realLinearInDec(pr,exp)
+            [x,pow,Coeff] = decomp(exp);
+            [~,xid] = isfree(x);
+            [~,vid] = isfree(pr.variables);
+            flag = ~(any(mss_match(vid,xid) == 0) | ...
+                     any(pow(:) > 1) | ...
+                     any(imag(Coeff(:)) ~= 0));
+        end
+        
+        %  Generate variables of a given type.        
+        function f = freeVariables(pr)
+            f = msspoly(pr.freeName,pr.numFree);
+        end
+        function p = posVariables(pr)
+            p = msspoly(pr.posName,pr.numPos);
+        end
+        function l = lorVariables(pr)
+            l = msspoly(pr.lorName,pr.numLor);
+        end
+        function r = rlorVariables(pr)
+            r = msspoly(pr.rlorName,pr.numRLor);
+        end
+        function p = psdVariables(pr)
+            p = msspoly(pr.psdName,pr.numPSD);
+        end
         
         function v = variables(pr)
         % v = variables(pr)
@@ -211,8 +212,11 @@ classdef spotsdp
         
         function [pr,r] = newRLor(pr,dim)
             if spot_hasSize(dim,[1 1]), dim = [dim 1]; end
-            if ~spot_hasSize(dim,[1 2]) || ~spot_isIntGE(dim,1)
-                error('Dimension must be 1x2 positive integer.');
+            if ~spot_hasSize(dim,[1 2]) ...
+                    || ~spot_isIntGE(dim(2),1)...
+                    || ~spot_isIntGE(dim(1),2)
+                error(['Dimension must be 1x2, first entry >= 2, ' ...
+                       'second entry >= 1.']);
             end
             
             r = reshape(msspoly(pr.rlorName,[prod(dim) pr.numRLor]),dim(1),dim(2));
@@ -284,104 +288,17 @@ classdef spotsdp
             end
         end
         
-        
-        function sol = optimize(pr,objective,options)
-            if nargin < 2, objective = 0; end
-            if nargin < 3, options = struct('fid',0); end
-
-            objective = msspoly(objective);
-            if ~realLinearInDec(pr,objective)
-                error('Objective must be real and linear in dec. variables.');
+        function [pr,l,y] = withRLor(pr,exp)
+            if ~isa(exp,'msspoly')
+                error('Argument must be an msspoly.');
             end
             
-            %  First, construct structure with counts of SeDuMi
-            %  variables.
-            K = struct();
-            K.f = pr.freeNum;
-            K.l = pr.posNum;
-            K.q = pr.lorDim;
-            K.r = pr.rlorDim;
-            K.s = pr.psdDim;
-            
-            KvarCnt = K.f+K.l+sum(K.q)+sum(K.r)+sum(K.s.^2);
-            
-            
-            v = [ pr.freeVariables
-                  pr.posVariables
-                  pr.lorVariables
-                  pr.rlorVariables ];
-            
-            vpsd = pr.psdVariables;
-            
-            vall = [v;vpsd];
-            
-            % Assign column numbers to v.
-            psdVarNo = zeros(1,length(vpsd));
-            psdVarNoSymm = zeros(1,length(vpsd));
-            psdVarOff = 0;    % Progress in variables, storing
-                              % upper triangle.
-            psdRedVarOff = 0; % Progress in variables, storing
-                              % entire matrix.
-            for i = 1:length(pr.psdDim)
-                n = pr.psdDim(i);
-                m = n*(n+1)/2;
-                psdVarNo(psdVarOff + (1:m)) = psdRedVarOff+mss_s2v(reshape(1:n^2,n,n));
-                psdVarNoSymm(psdVarOff + (1:m)) = psdRedVarOff+mss_s2v(reshape(1:n^2,n,n)');
-                psdVarOff = psdVarOff + m;
-                psdRedVarOff = psdRedVarOff + n^2;
-            end
-            
-            varNo = [ 1:length(v) length(v)+psdVarNo];
-            varNoSymm = [ 1:length(v) length(v)+psdVarNoSymm];
-
-            
-            function [bs,As] = linearToSedumi(lin)
-                [veq,peq,Ceq] = decomp(lin);
-                constant = ~any(peq~=0,2);%all(peq == 0,2);
-                cnsti = find(constant);
-                
-                bs = -Ceq(:,cnsti);
-                
-                Aeq = Ceq(:,~constant)*peq(~constant,:);
-
-                [~,vid] = isfree(vall);
-                [~,veqid] = isfree(veq);
-                veqIndices = mss_match(vid,veqid);
-                
-                % T*vall = veq;
-                T = sparse(1:length(veq),veqIndices,ones(length(veq),1));
-                
-                [i,j,s] = find(Aeq*T);
-
-                As = sparse(i,varNo(j),s,...
-                            size(Aeq,1),KvarCnt);
-            end
-            
-            [b,A] = linearToSedumi(pr.equations);
-            [~,c] = linearToSedumi(objective);
-            
-            dualObjective = b'*pr.dualVariables;
-
-            [x,y,info] = sedumi(A,b,c,K,options);
-            
-            if info.pinf, 
-                primalSol = NaN*ones(size(length(varNo),1));
+            if size(exp,1) == 2
+                [pr,l,y] = pr.withPos(pr,exp);
             else
-                primalSol = x(varNo);
+                [pr,l] = pr.newRLor(size(exp));
+                [pr,y] = pr.withEqs(exp(:)-l(:));
             end
-            
-            if info.dinf
-                dualSol = NaN*ones(size(y));
-                dualSlack = NaN*ones(size(primalSol));
-            else
-                dualSol = y;
-                z = c'-A'*y;
-                dualSlack = (z(varNo)+z(varNoSymm))/2;
-            end
-
-            sol = spotsqlsol(pr,info,...
-                             objective,dualObjective,...
-                             primalSol,dualSol,dualSlack);
         end
         
     end

@@ -19,7 +19,7 @@ classdef spotsolversedumi < spotsdpsolver
             can = 1;
         end
         
-        function sol = optimize(solvr,pr,objective)
+        function sol = minimize(solver,pr,objective)
             if nargin < 2, objective = 0; end
             if nargin < 3, options = struct('fid',0); end
 
@@ -68,12 +68,12 @@ classdef spotsolversedumi < spotsdpsolver
             varNo = [ 1:length(v) length(v)+psdVarNo];
             varNoSymm = [ 1:length(v) length(v)+psdVarNoSymm];
 
-            [b,A] = spotsolversedumi.linearToSedumi(pr.equations);
-            [~,c] = spotsolversedumi.linearToSedumi(objective);
+            [A,b] = spotsdpsolver.linearToSedumi(pr.equations,vall,varNo,KvarCnt);
+            [c,~] = spotsdpsolver.linearToSedumi(objective,vall,varNo,KvarCnt);
             
             dualObjective = b'*pr.dualVariables;
 
-            [x,y,info] = sedumi(A,b,c,K,options);
+            [x,y,info] = sedumi(A,b,c,K,solver.options);
             
             if info.pinf, 
                 primalSol = NaN*ones(size(length(varNo),1));
@@ -93,14 +93,6 @@ classdef spotsolversedumi < spotsdpsolver
             sol = spotsdpsol(pr,info,...
                              objective,dualObjective,...
                              primalSol,dualSol,dualSlack);
-        end
-    end
-    
-    methods (Static, private)
-        function [As,bs] = linearToSedumi(lin,vall,varNo,KvarCnt)
-            [A,bs] = spotsdpsolver.decompLinear(lin,vall);
-            [i,j,s] = find(A);
-            As = sparse(i,varNo(j),s,size(A,1),KvarCnt);
         end
     end
 end

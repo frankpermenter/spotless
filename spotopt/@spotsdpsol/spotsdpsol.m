@@ -1,4 +1,4 @@
-classdef spotsqlsol
+classdef spotsdpsol
     properties 
         program = [];
         primalSolution = [];
@@ -17,7 +17,7 @@ classdef spotsqlsol
             f = sol.info.dinf;
         end
         
-        function sol = spotsqlsol(prog,info,obj,dobj,psol,dsol,dslack)
+        function sol = spotsdpsol(prog,info,obj,dobj,psol,dsol,dslack)
             sol.program = prog;
             sol.info = info;
             sol.primalSolution = psol;
