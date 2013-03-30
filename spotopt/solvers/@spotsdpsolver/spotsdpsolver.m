@@ -1,12 +1,19 @@
 classdef  spotsdpsolver 
-    methods (Abstract)
-        %inst = isInstalled(solvr);
-        can = canSolve(solvr,sdp);
-        sol = minimizePrimalForm(solvr,sdp,objective);
-        sol = minimizeDualForm(solvr,sdp,objective);
+    methods
+        function can = canSolve(solvr,sdp)
+            can = 0;
+        end
+
+        function sol = minimizePrimalForm(solvr,sdp,objective)
+            error('minimizePrimalForm not implemented.');
+        end
+        
+        function sol = minimizeDualForm(solvr,sdp,objective)
+            error('minimizeDualForm not implemented.');
+        end
     
         function sol = minimize(solver,pr,objective)
-            if pr.isStandardDualForm(pr)
+            if pr.isStandardDualForm()
                 sol = solver.minimizeDualForm(pr,objective);
             else
                 sol = solver.minimizePrimalForm(pr,objective);
@@ -88,7 +95,7 @@ classdef  spotsdpsolver
                 error('Objective must be real and linear in dec. variables.');
             end
             
-            if ~spotsdp.isStandardDualForm(pr)
+            if ~pr.isStandardDualForm()
                 error(['Right now the program must be in standard dual ' ...
                        'format.']);
                 

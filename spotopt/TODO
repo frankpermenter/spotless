@@ -8,8 +8,9 @@ Finish spotprog:
        - Write SOSConstraint class.
 
 Improve spotsdpsolver:
-       - Need a interface for deciding can it be solved.
-       - Add the ability to "preprocess" 
+	- options interfaces
+	- Need a interface for deciding can it be solved.
+	- Add the ability to "preprocess" 
 
 
 
