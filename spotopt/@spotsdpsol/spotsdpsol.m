@@ -1,11 +1,10 @@
 classdef spotsdpsol
     properties 
         program = [];
+        user_variables = [];
         primalSolution = [];
-        dualSolution = [];
-        dualSlack = [];
-        objective = [];
-        dualObjective = [];
+        G = [];
+        h = [];
         info = [];
     end
     
@@ -17,35 +16,19 @@ classdef spotsdpsol
             f = sol.info.dinf;
         end
         
-        function sol = spotsdpsol(prog,info,obj,dobj,psol,dsol,dslack)
+        function sol = spotsdpsol(prog,info,uservars,psol)
             sol.program = prog;
             sol.info = info;
+            sol.user_variables = uservars;
             sol.primalSolution = psol;
-            sol.dualSolution = dsol;
-            sol.dualSlack = dslack;
-            sol.objective = obj;
-            sol.dualObjective = dobj;
         end
         
         function ev = eval(sol,exp)
             if sol.primalInfeasible
                 error('Primal Infeasible, cannot evalutate primal variables.');
             end
-            ev = subs(exp,[sol.program.variables],...
+            ev = subs(exp,[sol.user_variables],...
                       [sol.primalSolution]);
-        end
-        function ev = dualEval(sol,exp)
-            if sol.dualInfeasible
-                error('Dual Infeasible, cannot evalutate dual variables.');
-            end
-            ev = subs(exp,[sol.program.dualVariables],...
-                      [sol.dualSolution]);
-        end
-        function ev = dualSlackEval(sol,exp)
-            if sol.dualInfeasible
-                error('Dual Infeasible, cannot evaluate dual variables.');
-            end
-            ev = subs(exp,sol.program.variables,sol.dualSlack);
         end
     end
 end

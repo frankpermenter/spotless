@@ -2,6 +2,8 @@ classdef spotsolversedumi < spotsdpsolver
     properties
         options = struct();
     end
+    
+    
     methods 
         
         function solvr = spotsolversedumi(options)
@@ -21,58 +23,9 @@ classdef spotsolversedumi < spotsdpsolver
         
         function sol = minimize(solver,pr,objective)
             if nargin < 2, objective = 0; end
-            if nargin < 3, options = struct('fid',0); end
-
-            objective = msspoly(objective);
-            if ~pr.realLinearInDec(objective)
-                error('Objective must be real and linear in dec. variables.');
-            end
             
-            %  First, construct structure with counts of SeDuMi
-            %  variables.
-            K = struct();
-            K.f = pr.freeNum;
-            K.l = pr.posNum;
-            K.q = pr.lorDim;
-            K.r = pr.rlorDim;
-            K.s = pr.psdDim;
+            [A,b,c,K,G,h,varNo] = spotsdpsolver.sdpToPrimalSedumiFormat(pr,objective);
             
-            KvarCnt = K.f+K.l+sum(K.q)+sum(K.r)+sum(K.s.^2);
-            
-            
-            v = [ pr.freeVariables
-                  pr.posVariables
-                  pr.lorVariables
-                  pr.rlorVariables ];
-            
-            vpsd = pr.psdVariables;
-            
-            vall = [v;vpsd];
-            
-            % Assign column numbers to v.
-            psdVarNo = zeros(1,length(vpsd));
-            psdVarNoSymm = zeros(1,length(vpsd));
-            psdVarOff = 0;    % Progress in variables, storing
-                              % upper triangle.
-            psdRedVarOff = 0; % Progress in variables, storing
-                              % entire matrix.
-            for i = 1:length(pr.psdDim)
-                n = pr.psdDim(i);
-                m = n*(n+1)/2;
-                psdVarNo(psdVarOff + (1:m)) = psdRedVarOff+mss_s2v(reshape(1:n^2,n,n));
-                psdVarNoSymm(psdVarOff + (1:m)) = psdRedVarOff+mss_s2v(reshape(1:n^2,n,n)');
-                psdVarOff = psdVarOff + m;
-                psdRedVarOff = psdRedVarOff + n^2;
-            end
-            
-            varNo = [ 1:length(v) length(v)+psdVarNo];
-            varNoSymm = [ 1:length(v) length(v)+psdVarNoSymm];
-
-            [A,b] = spotsdpsolver.linearToSedumi(pr.equations,vall,varNo,KvarCnt);
-            [c,~] = spotsdpsolver.linearToSedumi(objective,vall,varNo,KvarCnt);
-            
-            dualObjective = b'*pr.dualVariables;
-
             [x,y,info] = sedumi(A,b,c,K,solver.options);
             
             if info.pinf, 
@@ -81,18 +34,33 @@ classdef spotsolversedumi < spotsdpsolver
                 primalSol = x(varNo);
             end
             
-            if info.dinf
-                dualSol = NaN*ones(size(y));
-                dualSlack = NaN*ones(size(primalSol));
-            else
-                dualSol = y;
-                z = c'-A'*y;
-                dualSlack = (z(varNo)+z(varNoSymm))/2;
-            end
-
-            sol = spotsdpsol(pr,info,...
-                             objective,dualObjective,...
-                             primalSol,dualSol,dualSlack);
-        end
+            primalSol = G*primalSol + h;
+            
+            sol = spotsdpsol(pr,info,pr.variables,primalSol);
+       end
+       
+       function sol = minimizeDualForm(solver,pr,objective)
+           
+           [A,b,c,K,G,h] = spotsdpsolver.sdpToDualSedumiFormat(pr,objective);
+           
+           [x,y,info] = sedumi(A,b,c,K,solver.options);
+           % elseif strcmp(options.solver,'sdpnal')
+           %     [blk,Asdpt,Csdpt,bsdpt] = read_sedumi(-mAT.',b,c,K);
+           %     [obj,X,y,Z,infosdpt] = sdpnal(blk,Asdpt,Csdpt,bsdpt);
+           %     info = struct('pinf',infosdpt.termcode == 1,...
+           %                   'dinf',infosdpt.termcode == 2);
+               
+           % else
+           %     error(['Unknown solver: ' options.solver]);
+           % end
+           
+           if info.dinf || info.pinf,
+               primalSol = NaN*ones(size(pr.variables,1),1);
+           else
+               primalSol = y;
+           end
+           
+           sol = spotsdpsol(pr,info,pr.variables,G*primalSol+h);
+       end
     end
 end

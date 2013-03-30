@@ -30,6 +30,10 @@ classdef spotsdp
         lorDim  = [];
         rlorDim = [];
         
+        psdCnst = {};
+        lorCnst = {};
+        posCnst = [];
+        
         equations = [];
     end
 
@@ -37,7 +41,23 @@ classdef spotsdp
         function n = psdDimToNo(d)
             n=(d+1).*d/2;
         end
+        
+        function [d,v] = psdNoToDim(n)
+        %
+        %  0 = d^2 + d - 2n
+        %  (sqrt(1 + 8n) - 1)/2
+        %
+            d=round((sqrt(1+8*n)-1)/2);
+            if spotsdp.psdDimToNo(d) ~= n
+                d = NaN;
+                v = 0;
+            else
+                v = 1;
+            end
+        end
+
     end
+
     
     methods ( Access = private )        
 %  These private functions define the names of variables
@@ -58,15 +78,7 @@ classdef spotsdp
         function nm = rlorName(pr)
             nm = [pr.name 'rlr'];
         end
-        function nm = dualName(pr)
-            nm = [pr.name 'dl'];
-        end
 
-        
-
-        
-
-        
         function flag = legalEq(pr,eq)
             if ~isa(eq,'msspoly')
                 flag = 0;
@@ -75,8 +87,9 @@ classdef spotsdp
             end
         end
     end
+    
+    % ---- General modeling methods (i.e. posing inequalities)
     methods
-        
         function pr=spotsdp(name)
         % pr=spotsdp(prefix)
         %
@@ -85,6 +98,32 @@ classdef spotsdp
         % Returns:
         % pr   -- New program, decision variables begin with
         %         the character prefix.
+        %
+        %
+        % spotsdp objects model SDP/SOCP/LP cone programs.
+        %
+        %    The feasible set of these programs is represented in a
+        %    mixture of standard primal and standard dual form:
+        %
+        %    (F)  x in K1,  y free,
+        %         A1.x + A2.y = b,
+        %         D1.x + D2.y + e in K2,
+        %
+        %    where K1 and K2 are products of the SDP, SOCP and LP
+        %    cones of various dimensions.
+        %
+        %    After the feasible set has been constructed, an
+        %    optimization problem can be solved via prg.optimze():
+        %   
+        %    minimize c'x + f'y  subj. to. (F)
+        %
+        %    Solution of these problems by primal dual solvers such
+        %    as SeDuMi or SDPT3 requires converting the problem to
+        %    standard primal or dual form.  The choice of which
+        %    conversion to apply can be forced as an optimizatio parameter.
+        %
+        %
+        %
             if nargin > 0
                 if ~ischar(name) || length(name) > 1
                     error('Program name must be a scalar character.');
@@ -120,6 +159,7 @@ classdef spotsdp
         function p = psdVariables(pr)
             p = msspoly(pr.psdName,pr.numPSD);
         end
+
         
         function v = variables(pr)
         % v = variables(pr)
@@ -131,10 +171,6 @@ classdef spotsdp
                   pr.psdVariables];
         end
         
-        function y = dualVariables(pr)
-            y = msspoly(pr.dualName,pr.numEq);
-        end
-
         function n = numPos(pr)
             n = pr.posNum;
         end
@@ -212,11 +248,8 @@ classdef spotsdp
         
         function [pr,r] = newRLor(pr,dim)
             if spot_hasSize(dim,[1 1]), dim = [dim 1]; end
-            if ~spot_hasSize(dim,[1 2]) ...
-                    || ~spot_isIntGE(dim(2),1)...
-                    || ~spot_isIntGE(dim(1),2)
-                error(['Dimension must be 1x2, first entry >= 2, ' ...
-                       'second entry >= 1.']);
+            if ~spot_hasSize(dim,[1 2]) || ~spot_isIntGE(dim,1)
+                error('Dimension must be 1x2 positive integer.');
             end
             
             r = reshape(msspoly(pr.rlorName,[prod(dim) pr.numRLor]),dim(1),dim(2));
@@ -224,82 +257,200 @@ classdef spotsdp
             pr.rlorDim = [pr.rlorDim dim(1)*ones(1,dim(2))];
         end
         
-        function [pr,y] = withEqs(pr,eq)
+        function [pr] = withEqs(pr,eq)
             if ~pr.legalEq(eq)
                 error(['Equations must be an msspoly linear in ' ...
                        'decision parameters.']);
             end
             eq = eq(:);
             
-            y = msspoly(pr.dualName,[length(eq) pr.numEq]);
             pr.equations = [pr.equations ; eq];
         end
          
         %-- 
-        function [pr,s,y] = withPos(pr,exp)
+        function [pr] = withPos(pr,exp)
             if ~isa(exp,'msspoly')
                 error('Argument must be a column of msspoly expressions.');
             end
             exp = exp(:);
             
-            [pr,s] = pr.newPos(length(exp));
-            [pr,y] = pr.withEqs(exp - s);
+            pr.posCnst = [pr.posCnst ; exp];
         end
         
-        function [pr,Q,y] = withPSD(pr,exp)
+        function [pr] = withPSD(pr,exp)
             if ~isa(exp,'msspoly') || size(exp,1) ~= size(exp,2)
                 error('Argument must be a square msspoly.');
             end
             
             if size(exp,1) == 1
-                [pr,l,y] = pr.withPos(pr,exp);
+                [pr,l] = pr.withPos(pr,exp);
             else
-                [pr,Q] = pr.newPSD(size(exp,1));
-                [pr,y] = pr.withEqs(mss_s2v(exp-Q));
+                exp = mss_s2v(exp);
+                pr.psdCnst{end+1} = exp;
             end
         end
         
-        function [pr,Qs,y] = withBlkPSD(pr,exp)
+        function [pr] = withBlkPSD(pr,exp)
             if ~isa(exp,'msspoly')
                 error('Argument must be an msspoly.');
             end
-            if ~spotsdp.validSymMtxVec(size(exp,1))
+            [~,v] = spotsdp.psdNoToDim(size(exp,1));
+            if ~v
                 error('Argument wrong size.');
             end
             
             if size(exp,1) == 1
-                [pr,l,y] = pr.withPos(pr,exp);
+                pr = pr.withPos(pr,exp);
             else
-                [pr,Qs] = pr.newBlkPSD(size(exp));
-                [pr,y] = pr.withEqs(exp-Q);
+                pr.psdCnst{end+1} = exp;
             end
         end
         
-        function [pr,l,y] = withLor(pr,exp)
+        function [pr] = withLor(pr,exp)
             if ~isa(exp,'msspoly')
                 error('Argument must be an msspoly.');
             end
             
             if size(exp,1) == 1
-                [pr,l,y] = pr.withPos(pr,exp);
+                [pr] = pr.withPos(exp);
             else
-                [pr,l] = pr.newLor(size(exp));
-                [pr,y] = pr.withEqs(exp(:)-l(:));
+                pr.lorCnst{end+1} = exp;
             end
         end
-        
-        function [pr,l,y] = withRLor(pr,exp)
-            if ~isa(exp,'msspoly')
-                error('Argument must be an msspoly.');
+    end
+    
+    
+    % ---- Methods for dealing with Dual Form.
+    
+    methods (Static)
+        function f = isStandardDualForm(prg)
+            f = isa(prg,'spotsdp') && ...
+                isempty(prg.equations) && ...
+                prg.numPos == 0 && ...
+                prg.numPSD == 0 && ...
+                prg.numLor == 0;
+        end
+    end
+    
+    methods
+% Transform programs into standard forms (maybe move this out?)
+        function [spPrg,G,h] = standardPrimalWithFree(prg)
+        %
+        %  [spPrg,G,h] = standardPrimalWithFree(prg)
+        %
+        %  Converts a program into the standard primal with free
+        %  variables form via the introduction of slack variables.
+        %
+        %  The matrices G,h are constructed so that
+        %
+        %  prg.variables = G*spPrg.variables + h.
+        %
+            spPrg = prg;
+            
+            if length(spPrg.posCnst) > 0
+                [spPrg,slack] = spPrg.newPos(length(spPrg.posCnst));
+                spPrg = spPrg.withEqs(spPrg.posCnst - slack);
+                spPrg.posCnst = {};
             end
             
-            if size(exp,1) == 2
-                [pr,l,y] = pr.withPos(pr,exp);
-            else
-                [pr,l] = pr.newRLor(size(exp));
-                [pr,y] = pr.withEqs(exp(:)-l(:));
-            end
+            for i = 1:length(spPrg.psdCnst)
+                cnst = spPrg.psdCnst{i};
+
+                [spPrg,slack] = spPrg.newBlkPSD([spotsdp.psdNoToDim(size(cnst,1)) size(cnst,2)]);
+                spPrg = spPrg.withEqs(cnst - slack);
+            end            
+            spPrg.psdCnst = {};
+            
+            for i = 1:length(spPrg.lorCnst)
+                cnst = spPrg.lorCnst{i};
+
+                [spPrg,slack] = spPrg.newLor(size(cnst,1));
+                spPrg = spPrg.withEqs(cnst - slack);
+            end            
+            spPrg.lorCnst = {};
+            
+            h = zeros(size(prg.variables));
+            
+            [var,pow,Coeff] = decomp(spPrg.variables);
+
+            mtch = match(var,prg.variables);
+            
+            G = Coeff(:,mtch)';
+            
         end
-        
+
+
+        function [prgout,G,h] = standardDual(prg)
+        %
+        %  [spPrg,G,h] = standardDual(prg)
+        %
+        %  Converts a program into the standard dual form.
+        %
+        %  Conic variables are replaced by new free variables.
+        %
+        %  Then, a lower dimensional parameterization:
+        %
+        %  [ x; y] = Gz + h
+        %
+        %  is found with [A1 A2] h = b, [A1 A2] G = 0.
+        %
+        %
+            
+            function prgout = moveConstraints(prgout,prg,free)
+                if ~isempty(prg.posCnst)
+                    prgout = prgout.withPos(subs(prg.posCnst,prg.variables,free));
+                end
+            end
+            
+            
+            function prgout = removeConic(prg)
+                prgout = spotsdp(prg.name);
+                [prgout,free] = prgout.newFree(length(prg.variables));
+            
+                if prg.numPos > 0
+                    mtch = match(prg.variables,prg.posVariables);
+                    prgout = prgout.withPos(free(mtch));
+                end
+                
+                if prg.numLor > 0
+                    error('Did not support Lorentz cone yet.');
+                end
+                
+                prgout = moveConstraints(prgout,prg,free);
+                prgout = prgout.withEqs(subs(prg.equations,prg.variables,free));
+            end
+            
+            function prgout = removeEquality(prg)
+            % Now resolve equality constraints.
+                if length(prg.equations) == 0,
+                    prgout = prg;
+                    G = speye(prg.numFree);
+                    h = sparse([],[],[],prg.numFree,1);
+                    return;
+                end
+                
+                prgout = spotsdp(prg.name);
+
+                [A,b] = spot_decomp_linear(prg.equations,prg.variables);
+            
+                % TODO: Return to this setting to preserve sparsity.
+                
+                h = A\b;
+                
+                [Q,R] = qr(A');
+                n = max(find(sum(abs(R),2)));
+                G = Q(:,n+1:end); % New basis
+
+                [prgout,z] = prgout.newFree(size(G,2));
+                
+                prgout = moveConstraints(prgout,prg,G*z+h);
+            end
+            
+            prgout = removeConic(prg);
+            prgout = removeEquality(prgout);
+          
+        end
     end
+    
+
 end
