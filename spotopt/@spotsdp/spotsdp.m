@@ -319,10 +319,7 @@ classdef spotsdp
         end
     end
     
-    
-    % ---- Methods for dealing with Dual Form.
-    
-    methods (Static)
+    methods
         function f = isStandardDualForm(prg)
             f = isa(prg,'spotsdp') && ...
                 isempty(prg.equations) && ...
@@ -330,9 +327,7 @@ classdef spotsdp
                 prg.numPSD == 0 && ...
                 prg.numLor == 0;
         end
-    end
-    
-    methods
+        
 % Transform programs into standard forms (maybe move this out?)
         function [spPrg,G,h] = standardPrimalWithFree(prg)
         %

@@ -2,8 +2,19 @@ classdef  spotsdpsolver
     methods (Abstract)
         %inst = isInstalled(solvr);
         can = canSolve(solvr,sdp);
-        sol = minimize(solvr,sdp,objective);
+        sol = minimizePrimalForm(solvr,sdp,objective);
+        sol = minimizeDualForm(solvr,sdp,objective);
+    
+        function sol = minimize(solver,pr,objective)
+            if pr.isStandardDualForm(pr)
+                sol = solver.minimizeDualForm(pr,objective);
+            else
+                sol = solver.minimizePrimalForm(pr,objective);
+            end
+        end
     end
+    
+    
     
     methods (Static)       
         function [As,bs] = linearToSedumi(lin,vall,varNo,KvarCnt)

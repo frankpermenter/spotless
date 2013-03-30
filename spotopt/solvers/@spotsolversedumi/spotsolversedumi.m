@@ -21,7 +21,9 @@ classdef spotsolversedumi < spotsdpsolver
             can = 1;
         end
         
-        function sol = minimize(solver,pr,objective)
+
+        
+        function sol = minimizePrimalForm(solver,pr,objective)
             if nargin < 2, objective = 0; end
             
             [A,b,c,K,G,h,varNo] = spotsdpsolver.sdpToPrimalSedumiFormat(pr,objective);
