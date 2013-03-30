@@ -1,0 +1,17 @@
+Overall TODO:
+-------------
+
+Finish spotprog:
+       - Basic functionality: layer around spotsdp.
+       - Add "constraints" which optionally can have
+       	 primal form and dual form representations.
+       - Write SOSConstraint class.
+
+Improve spotsdpsolver:
+       - Need a interface for deciding can it be solved.
+       - Add the ability to "preprocess" 
+
+
+
+
+
