@@ -6,48 +6,44 @@ classdef spotprog
         numVar    = 0;  % Number of variables.
         
         % Mapping taking sdp variables into user facing variables.
-        var_expr = [];
+        variableExpr = [];
         
-    end
-    
-    methods (Static)
-
     end
     
     methods ( Access = private )        
-        function nm = varName(prob)
-            nm = [prob.sdp.name 'var'];
+        function nm = varName(prog)
+            nm = [prog.sdp.name 'var'];
         end
         
-        function [prob,v] = newVariables(prob,var_sdp)
-            prob.var_expr = [ prob.var_expr ; var_sdp ];
-            v = msspoly(prob.varName,[length(var_sdp) prob.numVar]);
-            prob.numVar = prob.numVar + length(var_sdp);
+        function [prog,v] = newVariables(prog,var_sdp)
+            prog.variableExpr = [ prog.variableExpr ; var_sdp ];
+            v = msspoly(prog.varName,[length(var_sdp) prog.numVar]);
+            prog.numVar = prog.numVar + length(var_sdp);
         end
                 
-        function sdpVar = toSDPVariables(prob,var)
+        function sdpVar = toSDPVariables(pr,var)
             sdpVar = subs(var,pr.variables,pr.variableExpr);
         end
         
     end
 
     methods
-        function prob = spotprog(shortname,longname)
+        function prog = spotprog(shortname,longname)
             if nargin >= 1,
-                prob.sdp = spotsdp(shortname);
+                prog.sdp = spotsdp(shortname);
             else
-                prob.sdp = spotsdp;
+                prog.sdp = spotsdp;
             end
             
             if nargin >= 2,
-                prob.longname = longname;
+                prog.longname = longname;
             else
-                prob.longname = 'default';
+                prog.longname = 'default';
             end
         end
         
         function v = variables(pr)
-            v = msspoly(prob.varName,prob.numVar);
+            v = msspoly(pr.varName,pr.numVar);
         end
         
         
@@ -86,83 +82,66 @@ classdef spotprog
                 error('Constraint must be string.');
             end
         end
+        
+        
+        function [prog,v] = new(prog,type,dim)
+            if nargin ~= 3,
+                error('Incorrect number of arugments.');
+            end 
+            
+            if ~isa(type,'char') 
+                error('Type must be string.');
+            elseif ~ismember(type,{'free','pos','lor','rlor','psd','blkpsd'})
+                error('Type must be string: free,pos,lor,rlor,psd,blkpsd.');
+            end
+            
+            
+            % Now standardize dimensions
+            if ismember(type,{'free','pos'})
+                if spot_hasSize(dim,[1 1])
+                    dim = [ dim 1];
+                end
+            end
+            
+            if strcmp(type,'psd') && ~spot_hasSize(dim,[1 1])
+                error(['Dimension for this type must be 1-by-1.']);
+            elseif ~spot_hasSize(dim,[1 2])
+                error(['Dimension for this type must be 1-by-2.']);
+            end
+            
+            if ~spot_isIntGE(dim,1), 
+                error(['Dimensions must be positive integers.']);
+            elseif strcmp(type,'rlor') & dim(1) < 2,
+                error(['First dimension for type rlor must be >= 2.']);
+            end
+                        
+            switch type
+              case 'free',
+                [prog.sdp,l] = prog.sdp.newFree(dim);
+              case 'pos',
+                [prog.sdp,l] = prog.sdp.newPos(dim);
+              case 'lor',
+                [prog.sdp,l] = prog.sdp.newLor(dim);
+              case 'rlor',
+                [prog.sdp,l] = prog.sdp.newRLor(dim);
+              case 'psd',
+                [prog.sdp,Q] = newPSD(spotsdp.psdDimToNo(dim));
+                l = mss_s2v(Q);
+              case 'blkpsd',
+                [prog.sdp,l] = prog.sdp.newBlkPSD(dim);
+            end
+            
+            [prog,v] = newVariables(prog,l);
+            
+            if strcmp(v,'psd')
+                v = mss_v2s(v);
+            end
+        end
+            
 
-        function cstr = newFree(dim)
-            if ~spot_hasSize(dim,[1 1]``) || ~spot_isIntGE(dim,1)
-                error('Dimension must be scalar positive integer.');
-            end
-            [prob.sdp,l] = newLor(prob.sdp,dim);
-            [prob,v] = newVariables(prob,l(:));
-            
-            v = reshape(v,size(l));
-        end
-
-        function cstr = newPos(dim)
-            if ~spot_hasSize(dim,[1 1]``) || ~spot_isIntGE(dim,1)
-                error('Dimension must be scalar positive integer.');
-            end
-            [prob.sdp,l] = newLor(prob.sdp,dim);
-            [prob,v] = newVariables(prob,l(:));
-            
-            v = reshape(v,size(l));
-        end
-        
-        function [prob,l] = newLor(prob,dim)
-            if spot_hasSize(dim,[1 1]), dim = [dim 1]; end
-            if ~spot_hasSize(dim,[1 2]) || ~spot_isIntGE(dim,1)
-                error('Dimension must be 1x2 positive integer.');
-            end
-            
-            [prob.sdp,l] = newLor(prob.sdp,dim);
-            [prob,v] = newVariables(prob,l(:));
-            
-            v = reshape(v,size(l));
-        end
-        
-        function [prob,l] = newLor(prob,dim)
-            if spot_hasSize(dim,[1 1]), dim = [dim 1]; end
-            if ~spot_hasSize(dim,[1 2]) || ~spot_isIntGE(dim,1)
-                error('Dimension must be 1x2 positive integer.');
-            end
-            
-            [prob.sdp,l] = newLor(prob.sdp,dim);
-            [prob,v] = newVariables(prob,l(:));
-            
-            v = reshape(v,size(l));
-        end
-        
-        function [prob,V] = newPSD(prob,dim)
-            if ~spot_hasSize(dim,[1 1]) || ~spot_isIntGE(dim,1)
-                error('Dimension must be scalar positive integer.');
-            end
-            
-            n = spotsdp.psdDimToNo(dim);
-            
-            [prob.sdp,Q] = newPSD(prob.sdp,dim);
-            
-            q = mss_s2v(Q);
-            
-            [prob,v] = newVariables(prob,q);
-            
-            V = mss_v2s(v);
-        end
-        
-         function [prob,Vs] = newBlkPSD(prob,dim)
-            if ~spot_hasSize(dim,[1 2]) || ~spot_isIntGE(dim,1)
-                error('Dimension must be 1x2 positive integer.');
-            end
-            
-            n = spotsdp.psdDimToNo(dim(1));
-            
-            [prob.sdp,Qs] = newBlkPSD(prob.sdp,dim);
-            
-            [prob,Vs] = newVariables(prob,Qs(:));
-            
-            Vs = reshape(Vs,size(Qs));
-        end
         
         
-        function sol = minimize(objective,solver)
+        function sol = minimize(pr,solver,objective)
         %
         %  sol = pr.minimize(objective,solver)
         %  [sol,err] = pr.minimize(objective,solver)
@@ -171,9 +150,19 @@ classdef spotprog
         %  solver    -- spotsolver
         %
         %  sol -- If the given solver can handle the problem type, sol is
-        %         a spotsol.  If the problem cannot be handled 
+        %         a spotsol.  If the program cannot be handled 
         %         err = 1 for two output arguments and an error is
         %         thrown o.w.
+        ;
+        % First solve the SDP
+            objective = subs(objective,pr.variables,pr.variableExpr);
+        
+            int_sol = solver.minimize(pr.sdp,objective);
+            
+            [A,b] = spot_decomp_linear(pr.variableExpr,pr.sdp.variables);
+
+            sol = spotsdpsol(pr,int_sol.info,pr.variables,...
+                             int_sol.primalSolution,A,b);
         end
         
     end

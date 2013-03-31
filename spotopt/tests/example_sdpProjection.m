@@ -5,14 +5,14 @@ function [pr,objective,answer] = example_sdpProjection(n)
     
     answer = norm(A-V*(D.*(D>=0))*inv(V),'fro');
     
-    pr = spotsdp;
-    [pr,p] = pr.newFree(nchoosek(n+1,2));
+    pr = spotprog;
+    [pr,p] = pr.new('free',nchoosek(n+1,2));
     P = mss_v2s(p);
-    pr = pr.withPSD(P);
+    pr = pr.with('psd',P);
     
-    [pr,l0] = pr.newFree(1);
+    [pr,l0] = pr.new('free',1);
     
-    pr = pr.withLor([l0 ; A(:)-P(:)]);
+    pr = pr.with('lor',[l0 ; A(:)-P(:)]);
 
     objective = l0;
 end

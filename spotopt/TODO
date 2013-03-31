@@ -8,6 +8,8 @@ Finish spotprog:
        - Write SOSConstraint class.
 
 Improve spotsdpsolver:
+	- spotsdpsol shoudl store the solver as well.
+	- Maybe add an "advice" functionality like sysid toolbox?
 	- options interfaces
 	- Need a interface for deciding can it be solved.
 	- Add the ability to "preprocess" 

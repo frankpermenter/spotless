@@ -42,7 +42,7 @@ classdef spotsolversedumi < spotsdpsolver
        end
        
        function sol = minimizeDualForm(solver,pr,objective)
-           
+
            [A,b,c,K,G,h] = spotsdpsolver.sdpToDualSedumiFormat(pr,objective);
            
            [x,y,info] = sedumi(A,b,c,K,solver.options);

@@ -13,6 +13,7 @@ classdef  spotsdpsolver
         end
     
         function sol = minimize(solver,pr,objective)
+
             if pr.isStandardDualForm()
                 sol = solver.minimizeDualForm(pr,objective);
             else
