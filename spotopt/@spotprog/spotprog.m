@@ -65,6 +65,8 @@ classdef spotprog
             
             if isa(cstr,'char')
                 switch cstr
+                  case 'eq', 
+                    pr.sdp = pr.sdp.withEqs(varargin{1});
                   case 'pos',
                     pr.sdp = pr.sdp.withPos(varargin{1});
                   case 'lor',
@@ -97,7 +99,7 @@ classdef spotprog
             
             
             % Now standardize dimensions
-            if ismember(type,{'free','pos'})
+            if ismember(type,{'free','pos','lor','rlor'})
                 if spot_hasSize(dim,[1 1])
                     dim = [ dim 1];
                 end
@@ -158,7 +160,7 @@ classdef spotprog
             objective = subs(objective,pr.variables,pr.variableExpr);
         
             int_sol = solver.minimize(pr.sdp,objective);
-            
+
             [A,b] = spot_decomp_linear(pr.variableExpr,pr.sdp.variables);
 
             sol = spotsdpsol(pr,int_sol.info,pr.variables,...

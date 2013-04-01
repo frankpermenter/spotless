@@ -27,7 +27,7 @@ classdef spotsolversedumi < spotsdpsolver
             if nargin < 2, objective = 0; end
             
             [A,b,c,K,G,h,varNo] = spotsdpsolver.sdpToPrimalSedumiFormat(pr,objective);
-            
+
             [x,y,info] = sedumi(A,b,c,K,solver.options);
             
             if info.pinf, 

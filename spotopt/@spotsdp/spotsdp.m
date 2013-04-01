@@ -1,5 +1,5 @@
 classdef spotsdp
-    properties 
+    properties
         % Developer's Notes about Internal Representation:
         % 
         % The program consists of a collection of variable dimensions:
@@ -32,6 +32,7 @@ classdef spotsdp
         
         psdCnst = {};
         lorCnst = {};
+        rlorCnst = {};
         posCnst = [];
         
         equations = [];
@@ -150,15 +151,52 @@ classdef spotsdp
         function p = posVariables(pr)
             p = msspoly(pr.posName,pr.numPos);
         end
-        function l = lorVariables(pr)
+        function [l,dim] = lorVariables(pr)
             l = msspoly(pr.lorName,pr.numLor);
+            dim = pr.lorDim;
         end
-        function r = rlorVariables(pr)
+        function [r,dim] = rlorVariables(pr)
             r = msspoly(pr.rlorName,pr.numRLor);
+            dim = pr.rlorDim;
         end
-        function p = psdVariables(pr)
+        function [p,dim] = psdVariables(pr)
             p = msspoly(pr.psdName,pr.numPSD);
+            dim = pr.psdDim;
         end
+        
+        function [pcstr,dim] = posConstraints(pr)
+            pcstr = pr.posCnst;
+            dim = length(pcstr);
+        end
+        
+        function [lcstr,dim] = lorConstraints(pr)
+            lcstr = [];
+            dim = [];
+            for i = 1:length(pr.lorCnst)
+                lcstr = [ lcstr ; pr.lorCnst{i}(:) ];
+                dim = [ dim size(pr.lorCnst{i},1)*ones(1,size(pr.lorCnst{i},2))];
+            end
+        end
+        
+        function [rcstr,dim] = rlorConstraints(pr)
+            rcstr = [];
+            dim = [];
+            for i = 1:length(pr.rlorCnst)
+                rcstr = [ rcstr ; pr.rlorCnst{i}(:) ];
+                dim = [ dim size(pr.rlorCnst{i},1)*ones(1,size(pr.rlorCnst{i},2))];
+            end
+        end
+        
+        
+        function [psdcstr,dim] = psdConstraints(pr)
+            dim      = [];
+            psdcstr  = [];
+            for i = 1:length(pr.psdCnst)
+                psdcstr = [ psdcstr ; pr.psdCnst{i}(:) ];
+                dim = [ dim spotsdp.psdNoToDim(size(pr.psdCnst{i},1))*ones(1,size(pr.psdCnst{i},2))];
+            end
+        end
+        
 
         
         function v = variables(pr)
@@ -317,6 +355,19 @@ classdef spotsdp
                 pr.lorCnst{end+1} = exp;
             end
         end
+        
+        function [pr] = withRLor(pr,exp)
+            if ~isa(exp,'msspoly')
+                error('Argument must be an msspoly.');
+            end
+            
+            if size(exp,1) == 1 || size(exp,2) == 2
+                [pr] = pr.withPos(exp);
+            else
+                pr.rlorCnst{end+1} = exp;
+            end
+        end
+        
     end
     
     methods
@@ -324,7 +375,8 @@ classdef spotsdp
             f = isempty(prg.equations) && ...
                 prg.numPos == 0 && ...
                 prg.numPSD == 0 && ...
-                prg.numLor == 0;
+                prg.numLor == 0 && ...
+                prg.numRLor == 0;
         end
         
 % Transform programs into standard forms (maybe move this out?)
@@ -363,6 +415,14 @@ classdef spotsdp
             end            
             spPrg.lorCnst = {};
             
+            for i = 1:length(spPrg.rlorCnst)
+                cnst = spPrg.rlorCnst{i};
+
+                [spPrg,slack] = spPrg.newRLor(size(cnst,1));
+                spPrg = spPrg.withEqs(cnst - slack);
+            end            
+            spPrg.rlorCnst = {};
+            
             h = zeros(size(prg.variables));
             
             [var,pow,Coeff] = decomp(spPrg.variables);
@@ -389,7 +449,7 @@ classdef spotsdp
         %  is found with [A1 A2] h = b, [A1 A2] G = 0.
         %
         %
-            
+
             function prgout = moveConstraints(prgout,prg,free)
                 if ~isempty(prg.posCnst)
                     prgout = prgout.withPos(subs(prg.posCnst,prg.variables,free));
@@ -408,6 +468,9 @@ classdef spotsdp
                 
                 if prg.numLor > 0
                     error('Did not support Lorentz cone yet.');
+                end
+                if prg.numRLor > 0
+                    error('Did not support Rotated Lorentz cone yet.');
                 end
                 
                 prgout = moveConstraints(prgout,prg,free);

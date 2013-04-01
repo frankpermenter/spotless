@@ -2,7 +2,7 @@ function [err,answer,pinf,dinf] = runFeasibleExample(solver,test,varargin)
     [pr,objective,answer] = test(varargin{:});
 
     sol = pr.minimize(solver,objective);
-    
+
     pinf = sol.primalInfeasible;
     dinf = sol.dualInfeasible;
     

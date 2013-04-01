@@ -118,26 +118,14 @@ classdef  spotsdpsolver
             %  variables.
             K = struct();
             K.f = 0;
-            K.r = 0;
             
-            pos = pr.posCnst;
-            K.l = length(pr.posCnst);
+            [pos,K.l] = pr.posConstraints();
+            [lor,K.q] = lorConstraints(pr);
+            [rlor,K.r] = rlorConstraints(pr);
+
+            v = [ pos ; lor ; rlor ];
             
-            K.q = [];
-            lor = [];
-            for i = 1:length(pr.lorCnst)
-                lor = [ lor ; pr.lorCnst{i}(:) ];
-                K.q = [ K.q size(pr.lorCnst{i},1)*ones(1,size(pr.lorCnst{i},2))];
-            end
-            
-            v = [ pos ; lor ];
-            
-            K.s = [];
-            vpsd = [];
-            for i = 1:length(pr.psdCnst)
-                vpsd = [ vpsd ; pr.psdCnst{i}(:) ];
-                K.s = [ K.s spotsdp.psdNoToDim(size(pr.psdCnst{i},1))*ones(1,size(pr.psdCnst{i},2))];
-            end
+            [vpsd,K.s] = pr.psdConstraints();
             
             KvarCnt = K.f+K.l+sum(K.q)+sum(K.r)+sum(K.s.^2);
             
