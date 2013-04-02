@@ -46,102 +46,60 @@ classdef spotprog
             v = msspoly(pr.varName,pr.numVar);
         end
         
-        
-        function pr = with(pr,cstr,varargin)
-        %
-        %   [pr,x] = pr.new(cstr,expr1,expr2,...)
-        %
-        %   cstr  -- spotcstr object.
-        %   exprI -- msspoly depending on pr.variables.
-        %   
-        %
-            if nargin ~= 3,
-                error('Incorrect number of arugments.');
-            end 
-            
-            for i = 1 :length(varargin)
-                varargin{i} = pr.toSDPVariables(varargin{i});
-            end
-            
-            if isa(cstr,'char')
-                switch cstr
-                  case 'eq', 
-                    pr.sdp = pr.sdp.withEqs(varargin{1});
-                  case 'pos',
-                    pr.sdp = pr.sdp.withPos(varargin{1});
-                  case 'lor',
-                    pr.sdp = pr.sdp.withLor(varargin{1});
-                  case 'rlor',
-                    pr.sdp = pr.sdp.withRLor(varargin{1});
-                  case 'psd',
-                    pr.sdp = pr.sdp.withPSD(varargin{1});
-                  case 'blkpsd',
-                    pr.sdp = pr.sdp.withBlkPSD(varargin{1});
-                  otherwise,
-                    error('Constraint must be string: pos,lor,rlor,psd,blkpsd.');
-                end
-            else
-                error('Constraint must be string.');
-            end
+        function pr = withEqs(pr,e)
+            pr.sdp = pr.sdp.withEqs(pr.toSDPVariables(e));
+        end
+        function pr = withPos(pr,e)
+            pr.sdp = pr.sdp.withPos(pr.toSDPVariables(e));
+        end
+        function pr = withLor(pr,e)
+            pr.sdp = pr.sdp.withLor(pr.toSDPVariables(e));
+        end
+        function pr = withRLor(pr,e)
+            pr.sdp = pr.sdp.withRLor(pr.toSDPVariables(e));
+        end
+        function pr = withPSD(pr,e)
+            pr.sdp = pr.sdp.withPSD(pr.toSDPVariables(e));
+        end
+        function pr = withBlkPSD(pr,e)
+            pr.sdp = pr.sdp.withBlkPSD(pr.toSDPVariables(e));
         end
         
         
-        function [prog,v] = new(prog,type,dim)
-            if nargin ~= 3,
-                error('Incorrect number of arugments.');
-            end 
-            
-            if ~isa(type,'char') 
-                error('Type must be string.');
-            elseif ~ismember(type,{'free','pos','lor','rlor','psd','blkpsd'})
-                error('Type must be string: free,pos,lor,rlor,psd,blkpsd.');
-            end
-            
-            
-            % Now standardize dimensions
-            if ismember(type,{'free','pos','lor','rlor'})
-                if spot_hasSize(dim,[1 1])
-                    dim = [ dim 1];
-                end
-            end
-            
-            if strcmp(type,'psd') && ~spot_hasSize(dim,[1 1])
-                error(['Dimension for this type must be 1-by-1.']);
-            elseif ~spot_hasSize(dim,[1 2])
-                error(['Dimension for this type must be 1-by-2.']);
-            end
-            
-            if ~spot_isIntGE(dim,1), 
-                error(['Dimensions must be positive integers.']);
-            elseif strcmp(type,'rlor') & dim(1) < 2,
-                error(['First dimension for type rlor must be >= 2.']);
-            end
-                        
-            switch type
-              case 'free',
-                [prog.sdp,l] = prog.sdp.newFree(dim);
-              case 'pos',
-                [prog.sdp,l] = prog.sdp.newPos(dim);
-              case 'lor',
-                [prog.sdp,l] = prog.sdp.newLor(dim);
-              case 'rlor',
-                [prog.sdp,l] = prog.sdp.newRLor(dim);
-              case 'psd',
-                [prog.sdp,Q] = newPSD(spotsdp.psdDimToNo(dim));
-                l = mss_s2v(Q);
-              case 'blkpsd',
-                [prog.sdp,l] = prog.sdp.newBlkPSD(dim);
-            end
-            
-            [prog,v] = newVariables(prog,l);
-            
-            if strcmp(v,'psd')
-                v = mss_v2s(v);
-            end
+        function [pr,v] = newFree(pr,dim)
+            [pr.sdp,s] = pr.sdp.newFree(dim);
+            [pr,v] = newVariables(pr,s);
         end
-            
+        
+        function [pr,v] = newPos(pr,dim)
+            [pr.sdp,s] = pr.sdp.newPos(dim);
+            [pr,v] = newVariables(pr,s);
+        end
 
+        function [pr,v] = newLor(pr,dim)
+            [pr.sdp,s] = pr.sdp.newLor(dim);
+            [pr,v] = newVariables(pr,s(:));
+            v = reshape(v,size(s));
+        end
         
+        function [pr,v] = newRLor(pr,dim)
+            [pr.sdp,s] = pr.sdp.newRLor(dim);
+            [pr,v] = newVariables(pr,s(:));
+            v = reshape(v,size(s));
+        end
+        
+        function [pr,v] = newPSD(pr,dim)
+            [pr.sdp,s] = pr.sdp.newPSD(dim);
+            [pr,v] = newVariables(pr,mss_s2v(s));
+            v = mss_v2s(v);
+        end
+        
+        
+        function [pr,v] = newBlkPSD(pr,dim)
+            [pr.sdp,s] = pr.sdp.newBlkPSD(dim);
+            [pr,v] = newVariables(pr,s(:));
+            v = reshape(v,size(s));
+        end
         
         function sol = minimize(pr,solver,objective)
         %
