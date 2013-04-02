@@ -57,7 +57,7 @@ classdef  spotsdpsolver
             
             user_variables = pr.variables;
             
-            [pr,G,h] = pr.standardPrimalWithFree();
+            [pr,G,h] = pr.primalize();
 
             %  First, construct structure with counts of SeDuMi
             %  variables.
@@ -107,8 +107,9 @@ classdef  spotsdpsolver
             end
            
             objective = subs(objective,user_variables,G*pr.variables+h);
-           
-            % minimize b'y
+            
+            %
+            % maximize b'y
             %          c-A'y in K.
             %
             % (1) Decide on the appropriate cone sizes.

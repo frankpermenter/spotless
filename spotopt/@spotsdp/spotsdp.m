@@ -30,9 +30,13 @@ classdef spotsdp
         lorDim  = [];
         rlorDim = [];
         
-        psdCnst = {};
-        lorCnst = {};
-        rlorCnst = {};
+        psdCstr = [];
+        psdCstrDim = [];
+        
+        lorCstr = [];
+        lorCstrDim = [];
+        rlorCstr = [];
+        rlorCstrDim = [];
         posCnst = [];
         
         equations = [];
@@ -155,13 +159,24 @@ classdef spotsdp
             l = msspoly(pr.lorName,pr.numLor);
             dim = pr.lorDim;
         end
+        
         function [r,dim] = rlorVariables(pr)
             r = msspoly(pr.rlorName,pr.numRLor);
             dim = pr.rlorDim;
         end
+        
         function [p,dim] = psdVariables(pr)
             p = msspoly(pr.psdName,pr.numPSD);
             dim = pr.psdDim;
+        end
+        
+        function p = psdVariable(pr,i)
+            if ~spot_isIntGE(i,1) || i > length(pr.psdDim)
+                error(['PSD variable ' num2str(i) ' does not exist.']);
+            end
+            i0 = sum(spotsdp.psdDimToNo(pr.psdDim(1:i-1)));
+            n = spotsdp.psdDimToNo(pr.psdDim(i));
+            p = mss_v2s(msspoly(pr.psdName,[n,i0]));
         end
         
         function [pcstr,dim] = posConstraints(pr)
@@ -170,33 +185,31 @@ classdef spotsdp
         end
         
         function [lcstr,dim] = lorConstraints(pr)
-            lcstr = [];
-            dim = [];
-            for i = 1:length(pr.lorCnst)
-                lcstr = [ lcstr ; pr.lorCnst{i}(:) ];
-                dim = [ dim size(pr.lorCnst{i},1)*ones(1,size(pr.lorCnst{i},2))];
-            end
+            lcstr = pr.lorCstr;
+            dim = pr.lorCstrDim;
         end
         
         function [rcstr,dim] = rlorConstraints(pr)
-            rcstr = [];
-            dim = [];
-            for i = 1:length(pr.rlorCnst)
-                rcstr = [ rcstr ; pr.rlorCnst{i}(:) ];
-                dim = [ dim size(pr.rlorCnst{i},1)*ones(1,size(pr.rlorCnst{i},2))];
-            end
+            rcstr = pr.rlorCstr;
+            dim = pr.rlorCstrDim;
         end
         
         
         function [psdcstr,dim] = psdConstraints(pr)
-            dim      = [];
-            psdcstr  = [];
-            for i = 1:length(pr.psdCnst)
-                psdcstr = [ psdcstr ; pr.psdCnst{i}(:) ];
-                dim = [ dim spotsdp.psdNoToDim(size(pr.psdCnst{i},1))*ones(1,size(pr.psdCnst{i},2))];
-            end
+            dim = pr.psdCstrDim;
+            psdcstr = pr.psdCstr;
         end
         
+        function [scstr,dim] = psdConstraint(pr,i)
+            if ~spot_hasSize(i,[1 1])  || ~spot_isIntGE(i,1) || ...
+                    i > length(pr.psdCstrDim)
+                error('Bad Index.');
+            end
+            
+            i0 = sum(spotsdp.psdDimToNo(pr.psdCstrDim(1:i-1)));
+            dim = pr.psdCstrDim(i);
+            scstr = pr.psdCstr(i0+(1:spotsdp.psdDimToNo(dim)));
+        end
 
         
         function v = variables(pr)
@@ -224,9 +237,11 @@ classdef spotsdp
         function n = numRLor(pr)
             n = sum(pr.rlorDim);
         end
+        
         function m = numEq(pr)
             m = length(pr.equations);
         end
+        
         
         function [pr,Q] = newPSD(pr,dim)
             if ~spot_hasSize(dim,[1 1]) || ~spot_isIntGE(dim,1)
@@ -237,6 +252,20 @@ classdef spotsdp
             Q = mss_v2s(msspoly(pr.psdName,[n pr.numPSD]));
             
             pr.psdDim = [pr.psdDim dim];
+        end
+        
+        function [pr,Q] = newPSDs(pr,dim)
+            if isempty(dim), Q = []; return; end
+
+            if size(dim,1) ~= 1 || ~spot_isIntGE(dim,1)
+                error('Dimension must be scalar positive integers.');
+            end
+            
+            n = sum(spotsdp.psdDimToNo(dim));
+            
+            Q = msspoly(pr.psdName,[n pr.numPSD]);
+            
+            pr.psdDim = [ pr.psdDim dim ];
         end
         
         function [pr,Qs] = newBlkPSD(pr,dim)
@@ -251,13 +280,15 @@ classdef spotsdp
         end
         
         function [pr,p] = newPos(pr,dim)
-            if ~spot_hasSize(dim,[1 1]) || ~spot_isIntGE(dim,1)
+            if ~spot_hasSize(dim,[1 1]) || ~spot_isIntGE(dim,0)
                 error('Dimension must be scalar positive integer.');
             end
             
-            p = msspoly(pr.posName,[dim pr.numPos]);
-            
-            pr.posNum = pr.posNum+dim;
+            if dim == 0, p = [];
+            else
+                p = msspoly(pr.posName,[dim pr.numPos]);
+                pr.posNum = pr.posNum+dim;
+            end
         end
         
         function [pr,f] = newFree(pr,dim)
@@ -284,6 +315,17 @@ classdef spotsdp
             pr.lorDim = [pr.lorDim dim(1)*ones(1,dim(2))];
         end
         
+        function [pr,l] = newLors(pr,dim)
+            if isempty(dim), l = []; return; end
+            
+            if size(dim,1) ~= 1 || ~spot_isIntGE(dim,1)
+                error('Dimension must be 1xn positive integer.');
+            end
+            
+            l = msspoly(pr.lorName,[sum(dim) pr.numLor]);
+            pr.lorDim = [ pr.lorDim dim ];
+        end
+
         function [pr,r] = newRLor(pr,dim)
             if spot_hasSize(dim,[1 1]), dim = [dim 1]; end
             if ~spot_hasSize(dim,[1 2]) || ~spot_isIntGE(dim,1)
@@ -293,6 +335,17 @@ classdef spotsdp
             r = reshape(msspoly(pr.rlorName,[prod(dim) pr.numRLor]),dim(1),dim(2));
             
             pr.rlorDim = [pr.rlorDim dim(1)*ones(1,dim(2))];
+        end
+        
+        function [pr,r] = newRLors(pr,dim)
+            if isempty(dim), r = []; return; end
+            
+            if size(dim,1) ~= 1 || ~spot_isIntGE(dim,2)
+                error('Dimension must be 1xn integer, >= 2.');
+            end
+            
+            r = msspoly(pr.rlorName,[sum(dim) pr.numRLor]);
+            pr.rlorDim = [ pr.rlorDim dim ];
         end
         
         function [pr] = withEqs(pr,eq)
@@ -315,16 +368,31 @@ classdef spotsdp
             pr.posCnst = [pr.posCnst ; exp];
         end
         
-        function [pr] = withPSD(pr,exp)
-            if ~isa(exp,'msspoly') || size(exp,1) ~= size(exp,2)
-                error('Argument must be a square msspoly.');
+        function [pr] = withPSD(pr,exp,dim)
+            if ~isa(exp,'msspoly') 
+                error('Argument must be an msspoly.');
             end
             
-            if size(exp,1) == 1
-                [pr,l] = pr.withPos(pr,exp);
-            else
+            % It is non-square.
+            if size(exp,1) ~= size(exp,2) || nargin > 2,
+                if size(exp,2) > 1,
+                    error('Argument must be square or a column.');
+                end
+                if nargin < 2,
+                    error(['For column argument, dim must be specified']); 
+                end
+                
+                if sum(spotsdp.psdDimToNo(dim)) ~= length(exp)
+                    error(['Dimension does not agree with length of ' ...
+                           'column argument.']);
+                end
+
+                pr.psdCstr = [pr.psdCstr ; exp ];
+                pr.psdCstrDim = [ pr.psdCstrDim dim];
+            else % Non-square and dim not specified.
+                dim = size(exp,1);
                 exp = mss_s2v(exp);
-                pr.psdCnst{end+1} = exp;
+                pr = pr.withPSD(exp,dim);
             end
         end
         
@@ -332,42 +400,61 @@ classdef spotsdp
             if ~isa(exp,'msspoly')
                 error('Argument must be an msspoly.');
             end
-            [~,v] = spotsdp.psdNoToDim(size(exp,1));
+            [dim,v] = spotsdp.psdNoToDim(size(exp,1));
             if ~v
                 error('Argument wrong size.');
             end
             
-            if size(exp,1) == 1
-                pr = pr.withPos(pr,exp);
-            else
-                pr.psdCnst{end+1} = exp;
-            end
+            pr = pr.withPSD(exp(:),dim*ones(1,size(exp,2)));
         end
         
-        function [pr] = withLor(pr,exp)
+        function [pr] = withLor(pr,exp,dim)
+            if nargin > 2 && isempty(dim),
+                return;
+            end
             if ~isa(exp,'msspoly')
                 error('Argument must be an msspoly.');
             end
             
-            if size(exp,1) == 1
-                [pr] = pr.withPos(exp);
+            if nargin == 2,
+                pr = pr.withLor(exp(:),size(exp,1)*ones(1,size(exp,2)));
             else
-                pr.lorCnst{end+1} = exp;
+                if size(dim,1) ~= 1 || ~spot_isIntGE(dim,1), 
+                    error('Dimensions must be row of positive integers.');
+                end
+                
+                if sum(dim) ~= length(exp),
+                    error(['Dimensions and expression length do not match.']); 
+                end
+                pr.lorCstr = [pr.lorCstr ; exp];
+                pr.lorCstrDim = [ pr.lorCstrDim dim ];
             end
         end
         
-        function [pr] = withRLor(pr,exp)
+        function [pr] = withRLor(pr,exp,dim)
+            if nargin > 2 && isempty(dim),
+                return;
+            end
             if ~isa(exp,'msspoly')
                 error('Argument must be an msspoly.');
             end
             
-            if size(exp,1) == 1 || size(exp,2) == 2
-                [pr] = pr.withPos(exp);
+            if nargin == 2,
+                pr = pr.withLor(exp(:),size(exp,1)*ones(1,size(exp,2)));
             else
-                pr.rlorCnst{end+1} = exp;
+                if size(dim,1) ~= 1 || ~spot_isIntGE(dim,2), 
+                    error('Dimensions must be row of integers, >= 2.');
+                end
+                
+                if sum(dim) ~= length(exp),
+                    error(['Dimensions and expression length do not match.']); 
+                end
+                
+                pr.rlorCstr = [pr.rlorCstr ; exp];
+                pr.rlorCstrDim = [ pr.rlorCstrDim dim ];
             end
         end
-        
+            
     end
     
     methods
@@ -380,59 +467,6 @@ classdef spotsdp
         end
         
 % Transform programs into standard forms (maybe move this out?)
-        function [spPrg,G,h] = standardPrimalWithFree(prg)
-        %
-        %  [spPrg,G,h] = standardPrimalWithFree(prg)
-        %
-        %  Converts a program into the standard primal with free
-        %  variables form via the introduction of slack variables.
-        %
-        %  The matrices G,h are constructed so that
-        %
-        %  prg.variables = G*spPrg.variables + h.
-        %
-            spPrg = prg;
-            
-            if length(spPrg.posCnst) > 0
-                [spPrg,slack] = spPrg.newPos(length(spPrg.posCnst));
-                spPrg = spPrg.withEqs(spPrg.posCnst - slack);
-                spPrg.posCnst = {};
-            end
-            
-            for i = 1:length(spPrg.psdCnst)
-                cnst = spPrg.psdCnst{i};
-
-                [spPrg,slack] = spPrg.newBlkPSD([spotsdp.psdNoToDim(size(cnst,1)) size(cnst,2)]);
-                spPrg = spPrg.withEqs(cnst - slack);
-            end            
-            spPrg.psdCnst = {};
-            
-            for i = 1:length(spPrg.lorCnst)
-                cnst = spPrg.lorCnst{i};
-
-                [spPrg,slack] = spPrg.newLor(size(cnst,1));
-                spPrg = spPrg.withEqs(cnst - slack);
-            end            
-            spPrg.lorCnst = {};
-            
-            for i = 1:length(spPrg.rlorCnst)
-                cnst = spPrg.rlorCnst{i};
-
-                [spPrg,slack] = spPrg.newRLor(size(cnst,1));
-                spPrg = spPrg.withEqs(cnst - slack);
-            end            
-            spPrg.rlorCnst = {};
-            
-            h = zeros(size(prg.variables));
-            
-            [var,pow,Coeff] = decomp(spPrg.variables);
-
-            mtch = match(var,prg.variables);
-            
-            G = Coeff(:,mtch)';
-            
-        end
-
 
         function [prgout,G,h] = standardDual(prg)
         %
