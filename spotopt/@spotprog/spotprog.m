@@ -7,7 +7,8 @@ classdef spotprog
         
         % Mapping taking sdp variables into user facing variables.
         variableExpr = [];
-        
+        preProc = {};
+        log = {};
     end
     
     methods ( Access = private )        
@@ -101,6 +102,34 @@ classdef spotprog
             v = reshape(v,size(s));
         end
         
+        function pr = setPreProc(pr,preproc)
+        %
+        %   pr = addPreProc(pr,preproc)
+        %
+        %   pr      -- a spotprog
+        %   preproc -- a SpotProgPreProc object.
+        %
+            pr.preProc{end+1} = preproc;
+        end
+        
+        
+        function [sdp,A,b,obj] = prepare(pr,objective)
+            objective = subs(objective,pr.variables,pr.variableExpr);
+            
+            [A,b] = spot_decomp_linear(pr.variableExpr,pr.sdp.variables);
+            b = -b;
+            
+            %  A*(Ai*z+bi)+b
+            sdp = pr.sdp;
+            for i = 1:length(pr.preProc)
+                [sdp,Ai,bi,log{i}] = pr.preProc{i}.preProcess(sdp);
+                A = A*Ai;
+                b = b+A*bi;
+            end
+            
+            obj = subs(objective,pr.variables,b+A*sdp.variables);
+        end
+        
         function sol = minimize(pr,solver,objective)
         %
         %  sol = pr.minimize(objective,solver)
@@ -113,14 +142,12 @@ classdef spotprog
         %         a spotsol.  If the program cannot be handled 
         %         err = 1 for two output arguments and an error is
         %         thrown o.w.
-        ;
-        % First solve the SDP
-            objective = subs(objective,pr.variables,pr.variableExpr);
+            ;
+            % First solve the SDP
+            [sdp,A,b,obj] = prepare(pr,objective);
         
-            int_sol = solver.minimize(pr.sdp,objective);
-
-            [A,b] = spot_decomp_linear(pr.variableExpr,pr.sdp.variables);
-
+            int_sol = solver.minimize(sdp,obj);
+            
             sol = spotsdpsol(pr,int_sol.info,pr.variables,...
                              int_sol.primalSolution,A,b);
         end
